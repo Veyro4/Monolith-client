@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "id": "monolith",
+  "version": "${version}",
+  "name": "Monolith",
+  "description": "Monolith client modules for Minecraft 1.21.11.",
+  "environment": "client",
+  "entrypoints": {
+    "client": [
+      "femboy.monolith.MonolithClient"
+    ]
+  },
+  "depends": {
+    "fabricloader": ">=0.18.4",
+    "minecraft": "~1.21.11",
+    "java": ">=21",
+    "fabric-api": "*"
+  },
+  "suggests": {
+    "sodium": "*"
+  }
+}
