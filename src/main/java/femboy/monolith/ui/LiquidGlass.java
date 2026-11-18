@@ -27,7 +27,7 @@ import java.util.Map;
  * resource reload precompiles them with the mod's shader sources.
  */
 public final class LiquidGlass {
-    private static final int[] RADII = {6, 8, 10, 14, 16, 22, 32, 64};
+    private static final int[] RADII = {6, 8, 9, 10, 12, 14, 16, 22, 32, 64};
     private static final RenderPipeline[] FILL = new RenderPipeline[RADII.length];
     private static final RenderPipeline[] STROKE = new RenderPipeline[RADII.length];
     private static final RenderPipeline[] FLAT = new RenderPipeline[RADII.length];
@@ -167,55 +167,10 @@ public final class LiquidGlass {
             int w = Math.abs(x1 - x0);
             int h = Math.abs(y1 - y0);
             float packed = w + h * 4096.0F;
-            int band = Math.min(radius(), Math.min(w, h) / 2);
-            if (pad == 0 && isStroke() && h - 2 * band > 2 && w - 2 * band > 2) {
-                // A 1px outline only touches the corner arcs and the outer 2px of each side;
-                // a full quad would shade and blend the whole panel area for nothing.
-                int c = band + 1;
-                quad(vertexConsumer, x0, y0, x0 + c, y0 + c, packed);
-                quad(vertexConsumer, x1 - c, y0, x1, y0 + c, packed);
-                quad(vertexConsumer, x0, y1 - c, x0 + c, y1, packed);
-                quad(vertexConsumer, x1 - c, y1 - c, x1, y1, packed);
-                quad(vertexConsumer, x0 + c, y0, x1 - c, y0 + 2, packed);
-                quad(vertexConsumer, x0 + c, y1 - 2, x1 - c, y1, packed);
-                quad(vertexConsumer, x0, y0 + c, x0 + 2, y1 - c, packed);
-                quad(vertexConsumer, x1 - 2, y0 + c, x1, y1 - c, packed);
-                return;
-            }
-            if (pad > 0 && h - 2 * band > 0 && w - 2 * band > 0) {
-                // Shadows only show outside the rect: draw a ring (4 bands reaching the rounded
-                // corners) instead of one quad over the whole panel. On weak GPUs the full quad
-                // cost a whole screen of invisible blended pixels per shadow.
-                quad(vertexConsumer, x0 - pad, y0 - pad, x1 + pad, y0 + band, packed);
-                quad(vertexConsumer, x0 - pad, y1 - band, x1 + pad, y1 + pad, packed);
-                quad(vertexConsumer, x0 - pad, y0 + band, x0 + band, y1 - band, packed);
-                quad(vertexConsumer, x1 - band, y0 + band, x1 + pad, y1 - band, packed);
-                return;
-            }
             put(vertexConsumer, x0 - pad, y0 - pad, -pad, -pad, packed, left);
             put(vertexConsumer, x0 - pad, y1 + pad, -pad, h + pad, packed, left);
             put(vertexConsumer, x1 + pad, y1 + pad, w + pad, h + pad, packed, right);
             put(vertexConsumer, x1 + pad, y0 - pad, w + pad, -pad, packed, right);
-        }
-
-        private boolean isStroke() {
-            return pipeline.getLocation().getPath().contains("liquid_stroke_");
-        }
-
-        private int radius() {
-            String path = pipeline.getLocation().getPath();
-            try {
-                return Integer.parseInt(path.substring(path.lastIndexOf('_') + 1));
-            } catch (RuntimeException e) {
-                return 64;
-            }
-        }
-
-        private void quad(VertexConsumer vertexConsumer, int ax, int ay, int bx, int by, float packed) {
-            put(vertexConsumer, ax, ay, ax - x0, ay - y0, packed, left);
-            put(vertexConsumer, ax, by, ax - x0, by - y0, packed, left);
-            put(vertexConsumer, bx, by, bx - x0, by - y0, packed, left);
-            put(vertexConsumer, bx, ay, bx - x0, ay - y0, packed, left);
         }
 
         // UV = position inside the rect in unscaled units, so the shader stays exact under any pose scale.

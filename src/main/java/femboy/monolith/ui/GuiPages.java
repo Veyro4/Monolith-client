@@ -14,29 +14,29 @@ public final class GuiPages {
     };
     public static final String[] FILTERS = {"All", "Blues", "Greens", "Purples", "Pinks", "Reds", "Oranges", "Yellows", "Monochrome", "Pastel", "Neon"};
     public static final String[][] THEMES = {
-            {"Arctic Blue", "Blues", "4DA3FF", "67E8F9", "C4B5FD", "0B1B33"},
-            {"Glacier", "Blues", "67E8F9", "BAE6FD", "E0F2FE", "0C4A6E"},
-            {"Skyline", "Blues", "38BDF8", "7DD3FC", "A5B4FC", "082F49"},
-            {"Cobalt Night", "Blues", "2563EB", "60A5FA", "1D4ED8", "0B1220"},
-            {"Emerald", "Greens", "10B981", "34D399", "059669", "022C22"},
-            {"Forest Glass", "Greens", "22C55E", "86EFAC", "166534", "052E16"},
-            {"Seafoam", "Greens", "5EEAD4", "99F6E4", "A7F3D0", "134E4A"},
-            {"Violet Prism", "Purples", "8B5CF6", "F0ABFC", "6366F1", "1A0B24"},
-            {"Lavender Haze", "Purples", "C4B5FD", "DDD6FE", "A78BFA", "312E81"},
-            {"Rose Quartz", "Pinks", "FB7185", "F9A8D4", "FDA4AF", "3F1220"},
-            {"Blush", "Pinks", "FDA4AF", "FECDD3", "FB7185", "4A1942"},
-            {"Cherry", "Reds", "EF4444", "F87171", "FB7185", "450A0A"},
-            {"Solar Gold", "Yellows", "FBBF24", "FDE68A", "F59E0B", "451A03"},
-            {"Tangerine", "Oranges", "FB923C", "FDBA74", "F97316", "431407"},
-            {"Obsidian", "Monochrome", "475569", "64748B", "1E293B", "020617"},
-            {"Silver Mist", "Monochrome", "CBD5E1", "E2E8F0", "94A3B8", "1E293B"},
-            {"Neon Cyan", "Neon", "22D3EE", "67E8F9", "A5F3FC", "083344"},
-            {"Neon Pink", "Neon", "FF4FD8", "F472B6", "C4B5FD", "500724"},
-            {"Arctic Rose", "Pastel", "F9A8D4", "67E8F9", "C4B5FD", "1E1B4B"},
-            {"Frost White", "Pastel", "DDEBFF", "E0F2FE", "C4B5FD", "1E293B"}
+            {"Arctic Blue", "Blues", "3DA0FF", "5CFFFF", "8AB4FF", "04101C"},
+            {"Glacier", "Blues", "2EE6FF", "7AF0FF", "B8FBFF", "042028"},
+            {"Skyline", "Blues", "1CB8FF", "4DDCFF", "7A9BFF", "041424"},
+            {"Cobalt Night", "Blues", "3B6BFF", "6C9BFF", "2F4DFF", "050814"},
+            {"Emerald", "Greens", "00E39A", "3DFFC2", "00C47A", "001810"},
+            {"Forest Glass", "Greens", "2BFF6A", "7DFF9A", "12D94A", "001408"},
+            {"Seafoam", "Greens", "2DFFE0", "7DFFE8", "A8FFD8", "001816"},
+            {"Violet Prism", "Purples", "9A4DFF", "E070FF", "6E5CFF", "120018"},
+            {"Lavender Haze", "Purples", "C9A6FF", "E4D4FF", "B07CFF", "140820"},
+            {"Rose Quartz", "Pinks", "FF4D7A", "FF8AD4", "FF6A8A", "1C0610"},
+            {"Blush", "Pinks", "FF7A9A", "FFB0C4", "FF4D78", "1C0814"},
+            {"Cherry", "Reds", "FF2A2A", "FF5A3C", "FF7A6A", "1A0000"},
+            {"Solar Gold", "Yellows", "FFC21A", "FFE56A", "FF9A00", "1A1000"},
+            {"Tangerine", "Oranges", "FF7A1A", "FFB15A", "FF4D00", "1A0800"},
+            {"Obsidian", "Monochrome", "8AA0B8", "C5D4E4", "5C7088", "020408"},
+            {"Silver Mist", "Monochrome", "E8EEF4", "FFFFFF", "B8C4D0", "101418"},
+            {"Neon Cyan", "Neon", "00F0FF", "5CFFFF", "A8FCFF", "001418"},
+            {"Neon Pink", "Neon", "FF2BD6", "FF6AE0", "D07CFF", "1A0014"},
+            {"Arctic Rose", "Pastel", "FF8AD4", "5CFFFF", "C9A6FF", "100818"},
+            {"Frost White", "Pastel", "F2F7FF", "E8FBFF", "D4C6FF", "101418"}
     };
-    public static final String[] DOCK = {"Language", "GUI scale", "Glass", "Font", "Stream proof", "Sounds", "Blur"};
-    public static final String[] PANES = {"lang", "scale", "quality", "font", "stream", "sounds", "blur"};
+    public static final String[] DOCK = {"Language", "Menu scale", "HUD scale", "Glass", "Font", "Stream proof", "Sounds", "Blur"};
+    public static final String[] PANES = {"lang", "scale", "hud", "quality", "font", "stream", "sounds", "blur"};
     private static final List<Card> CARDS = new ArrayList<>();
 
     static {

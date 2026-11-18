@@ -29,6 +29,8 @@ public final class UiIcons {
         LABELS.put("Client", "client");
         LABELS.put("Language", "language");
         LABELS.put("GUI scale", "guiscale");
+        LABELS.put("Menu scale", "guiscale");
+        LABELS.put("HUD scale", "guiscale");
         LABELS.put("Glass", "glass");
         LABELS.put("Font", "font");
         LABELS.put("Stream proof", "stream");

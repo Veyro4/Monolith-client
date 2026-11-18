@@ -12,6 +12,7 @@ import net.minecraft.client.resources.sounds.SimpleSoundInstance;
 import net.minecraft.network.chat.Component;
 import net.minecraft.sounds.SoundEvents;
 
+import java.awt.GraphicsEnvironment;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -27,7 +28,6 @@ public final class ClickGuiScreen extends Screen {
     private static final int INK = 0xFFF4F7FA;
     private static final int MUTED = 0xFF93A4B7;
     // Strength of the enabled-module wash (0-255): light, but clearly the theme colour.
-    private static final int MODULE_GLOW = 0x66;
     private static String search = "";
     private static boolean searchOn;
     private static String category = "Combat";
@@ -45,8 +45,11 @@ public final class ClickGuiScreen extends Screen {
     private static boolean stream;
     private static int glass = 70;
     private static int blurAmt = 8;
-    private static int uiScale = 100;
-    private static String fontName = "SansSerif";
+    private static final int[] SCALES = {50, 75, 100, 125, 150, 175, 200, 250};
+    private static int menuScale = 100;
+    private static int hudScale = 100;
+    private static String fontName = "Helvetica Neue";
+    private static String[] fontChoices;
     private static String lang = "English";
     private static String theme = "Arctic Blue";
     private static String themeFilter = "All";
@@ -56,12 +59,10 @@ public final class ClickGuiScreen extends Screen {
     private static long hoverQuiet;
     private net.minecraft.client.resources.sounds.SoundInstance hoverSound;
     private static long pageAt;
-    // Animations: GUI open pop, category hover lift, module cards bouncing in on a category switch.
     private static final long OPEN_MS = 380L;
     private static final long CARD_MS = 420L;
     private static final long CARD_STAGGER_MS = 26L;
     private static final int CARD_CLIP_MARGIN = 12;
-    private static final Map<String, Motion.Spring> catLift = new HashMap<>();
     // Caps one frame's step so a hitch (texture builds, GC) can't skip an animation,
     // while normal low frame rates (10-30 fps in-world on weak GPUs) still play in real time.
     private static final float MAX_FRAME_S = 0.1F;
@@ -130,7 +131,7 @@ public final class ClickGuiScreen extends Screen {
         cardsDelay = 90L;
         lastFrame = 0L;
         savedBlur = this.minecraft.options.getMenuBackgroundBlurriness();
-        this.minecraft.options.menuBackgroundBlurriness().set(backdrop());
+        SmoothGui.font(activeFont());
     }
 
     @Override
@@ -143,16 +144,21 @@ public final class ClickGuiScreen extends Screen {
 
     @Override
     public void tick() {
-        int radius = backdrop();
-        if (this.minecraft.options.getMenuBackgroundBlurriness() != radius) {
-            this.minecraft.options.menuBackgroundBlurriness().set(radius);
+        int radius = worldBlur();
+        int want = radius <= 0 && savedBlur != null ? savedBlur : Math.max(radius, 0);
+        if (this.minecraft.options.getMenuBackgroundBlurriness() != want) {
+            this.minecraft.options.menuBackgroundBlurriness().set(want);
         }
     }
 
     @Override
     public void renderBackground(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
-        this.minecraft.options.menuBackgroundBlurriness().set(backdrop());
-        g.blurBeforeThisStratum();
+        int radius = worldBlur();
+        if (radius >= 1) {
+            this.minecraft.options.menuBackgroundBlurriness().set(radius);
+            g.blurBeforeThisStratum();
+        }
+        g.fill(0, 0, this.width, this.height, 0x66080A10);
     }
 
     @Override
@@ -161,7 +167,7 @@ public final class ClickGuiScreen extends Screen {
         this.height = g.guiHeight();
         noteHover(hoverAt(mouseX, mouseY));
         long anim = searchOn || search.isEmpty() ? System.currentTimeMillis() / 70L : 0L;
-        int sig = Objects.hash(category, search, searchOn, (int) scroll, (int) sideScroll, open, glass, blurAmt, accent, theme, profileOpen, pane, stream, fontName, lang, uiScale, mouseX / 6, mouseY / 6, anim);
+        int sig = Objects.hash(category, search, searchOn, (int) scroll, (int) sideScroll, open, glass, blurAmt, accent, theme, profileOpen, pane, stream, fontName, lang, menuScale, hudScale, mouseX / 6, mouseY / 6, anim);
         long now = System.nanoTime();
         frameDt = lastFrame == 0L ? 0.0F : Math.min(MAX_FRAME_S, (now - lastFrame) / 1.0E9F);
         lastFrame = now;
@@ -189,11 +195,14 @@ public final class ClickGuiScreen extends Screen {
             g.pose().translate(-cx, -cy);
             SmoothGui.alpha(Motion.outCubic(Math.min(1.0F, open * 1.8F)));
         }
-        SmoothGui.shadow(lay.f.x, lay.f.y, lay.f.w, lay.f.h, 22, 0x70000000);
+        SmoothGui.shadow(lay.f.x, lay.f.y, lay.f.w, lay.f.h, 22, 0x78000000);
         SmoothGui.glass(lay.f.x, lay.f.y, lay.f.w, lay.f.h, 22, shell(), false);
-        SmoothGui.stroke(lay.f.x, lay.f.y, lay.f.w, lay.f.h, 22, 1.0F, 0x1AFFFFFF);
 
-        SmoothGui.fill(lay.f.x + lay.pad, lay.f.y + lay.pad, lay.f.side - lay.pad * 2, lay.f.h - lay.pad * 2, 16, 0x75121212);
+        int sideX = lay.f.x + lay.pad;
+        int sideY = lay.f.y + lay.pad;
+        int sideW = lay.f.side - lay.pad * 2;
+        int sideH = lay.f.h - lay.pad * 2;
+        SmoothGui.glass(sideX, sideY, sideW, sideH, 16, side(), false);
         SmoothGui.mark(lay.f.x + lay.pad + 8, lay.f.y + lay.pad + 4, accent);
         SmoothGui.text("Monolith", lay.f.x + lay.pad + 40, lay.f.y + lay.pad + 8, 16, INK);
         SmoothGui.text(word("client"), lay.f.x + lay.pad + 40, lay.f.y + lay.pad + 26, 11, MUTED);
@@ -212,31 +221,13 @@ public final class ClickGuiScreen extends Screen {
                 boolean on = group[i].equals(category) && search.isEmpty();
                 boolean hot = mouseX >= lay.f.x + lay.pad + 8 && mouseX <= lay.f.x + lay.f.side - lay.pad && mouseY >= y && mouseY < y + 30;
                 float hover = hoverStep(group[i], hot && !on);
-                float lift = catLift.computeIfAbsent(group[i], k -> new Motion.Spring()).step(hot ? 1.0F : 0.0F, frameDt);
-                boolean lifted = Math.abs(lift) > 0.002F;
-                if (lift > 0.01F) {
-                    // Soft shadow left behind as the row rises.
-                    SmoothGui.fill(lay.f.x + lay.pad + 10, y + 3, lay.rowW - 4, 30, 8, Math.round(0x40 * Math.min(1.0F, lift)) << 24);
-                }
-                if (lifted) {
-                    float cx = lay.f.x + lay.pad + 8 + lay.rowW / 2.0F;
-                    float cy = y + 15.0F;
-                    float scale = 1.0F + 0.06F * lift;
-                    g.pose().pushMatrix();
-                    g.pose().translate(cx, cy - 3.0F * lift);
-                    g.pose().scale(scale, scale);
-                    g.pose().translate(-cx, -cy);
-                }
                 if (on) {
                     SmoothGui.fill(lay.f.x + lay.pad + 8, y, lay.rowW, 30, 8, tone(0xFF15161B, accent, 0.24F));
                 } else if (hover > 0.02F) {
-                    SmoothGui.fill(lay.f.x + lay.pad + 8, y, lay.rowW, 30, 8, (Math.round(0x1C * Math.min(1.0F, hover)) << 24) | 0xFFFFFF);
+                    SmoothGui.fill(lay.f.x + lay.pad + 8, y, lay.rowW, 30, 8, (Math.round(0x18 * Math.min(1.0F, hover)) << 24) | 0xFFFFFF);
                 }
                 UiIcons.draw(g, group[i], lay.f.x + lay.pad + 14, y + 7, 16, accent);
                 SmoothGui.text(word(group[i]), lay.f.x + lay.pad + 40, y + 8, 13, INK);
-                if (lifted) {
-                    g.pose().popMatrix();
-                }
                 y += 34;
             }
         }
@@ -280,7 +271,7 @@ public final class ClickGuiScreen extends Screen {
         float baseAlpha = SmoothGui.alpha();
         // Clip starts a little above the first row so its rounded top, rim light, shadow and
         // bounce overshoot aren't sliced flat (the gap under the search box has room for it).
-        SmoothGui.clip(lay.mainX, lay.listTop - CARD_CLIP_MARGIN, lay.f.w - lay.f.side - 8, lay.listH + CARD_CLIP_MARGIN);
+        SmoothGui.clip(lay.mainX, lay.listTop - CARD_CLIP_MARGIN, lay.f.w - lay.f.side, lay.listH + CARD_CLIP_MARGIN);
         int[] colY = new int[] {lay.listTop - (int) scroll, lay.listTop - (int) scroll, lay.listTop - (int) scroll};
         for (int i = 0; i < rows.size(); i++) {
             GuiPages.Card card = rows.get(i);
@@ -307,16 +298,13 @@ public final class ClickGuiScreen extends Screen {
             }
             boolean hot = mouseX >= x && mouseX <= x + lay.colW && mouseY >= cy && mouseY <= cy + cardH;
             boolean on = card.enabled();
-            SmoothGui.shadow(x, cy, lay.colW, cardH, 16, 0x38000000);
-            SmoothGui.glass(x, cy, lay.colW, cardH, 16, panel(), true);
+            SmoothGui.shadow(x, cy, lay.colW, cardH, 16, 0x50000000);
+            SmoothGui.glass(x, cy, lay.colW, cardH, 16, panel(), false);
             if (on) {
-                int face = accent & 0xFFFFFF;
-                int left = (MODULE_GLOW << 24) | face;
-                int right = (MODULE_GLOW << 24) | darken(face);
-                SmoothGui.gradient(x, cy, lay.colW, cardH, 16, left, right);
-                SmoothGui.stroke(x, cy, lay.colW, cardH, 16, 1.0F, 0xFF000000 | face);
+                SmoothGui.flat(x, cy + 8, 3, cardH - 16, 2, accent);
+                SmoothGui.flat(x, cy, lay.colW, cardH, 16, (0x14 << 24) | (accent & 0xFFFFFF));
             } else if (hot) {
-                SmoothGui.fill(x, cy, lay.colW, cardH, 16, 0x14FFFFFF);
+                SmoothGui.flat(x, cy, lay.colW, cardH, 16, 0x0CFFFFFF);
             }
             SmoothGui.text(word(card.name), x + 12, cy + 10, 13, ink);
             SmoothGui.text(clip(word(card.desc), lay.colW - 24), x + 12, cy + 26, 11, MUTED);
@@ -358,7 +346,7 @@ public final class ClickGuiScreen extends Screen {
                 break;
             }
         }
-        SmoothGui.clip(lay.mainX, lay.listTop + 34, lay.f.w - lay.f.side - 8, lay.listH - 34);
+        SmoothGui.clip(lay.mainX, lay.listTop + 34, lay.f.w - lay.f.side, lay.listH - 34);
         int cols = 4;
         int gap = 8;
         int w = (lay.f.w - lay.f.side - 24 - gap * (cols - 1)) / cols;
@@ -370,13 +358,15 @@ public final class ClickGuiScreen extends Screen {
             int x = lay.mainX + 8 + (n % cols) * (w + gap);
             int y = lay.listTop + 34 - (int) scroll + (n / cols) * 70;
             boolean on = item[0].equals(theme);
-            SmoothGui.glass(x, y, w, 62, 12, panel(), true);
+            SmoothGui.glass(x, y, w, 62, 12, panel(), false);
+            if (on) {
+                SmoothGui.gradient(x, y, w, 62, 12, (0x28 << 24) | (accent & 0xFFFFFF), 0x00000000);
+            }
             SmoothGui.text(item[0], x + 12, y + 10, 12, INK);
             for (int s = 0; s < 4; s++) {
                 SmoothGui.circle(x + 12 + s * 12, y + 36, 8, 0xFF000000 | Integer.parseInt(item[2 + s], 16));
             }
             if (on) {
-                SmoothGui.stroke(x, y, w, 62, 12, 1.0F, accent);
                 SmoothGui.circle(x + w - 20, y + 10, 10, accent);
             }
             n++;
@@ -386,7 +376,7 @@ public final class ClickGuiScreen extends Screen {
 
     private void paintDock(Layout lay, int mouseX, int mouseY) {
         SmoothGui.shadow(lay.dockX, lay.dockY, lay.dockW, lay.dockH, 14, 0x60000000);
-        SmoothGui.glass(lay.dockX, lay.dockY, lay.dockW, lay.dockH, 14, panel(), true);
+        SmoothGui.glass(lay.dockX, lay.dockY, lay.dockW, lay.dockH, 14, panel(), false);
 
         for (int i = 0; i < GuiPages.DOCK.length; i++) {
             int y = lay.dockY + 6 + i * 32;
@@ -397,12 +387,16 @@ public final class ClickGuiScreen extends Screen {
             } else if (hot) {
                 SmoothGui.fill(lay.dockX + 6, y, lay.dockW - 12, 30, 8, 0x16FFFFFF);
             }
-            UiIcons.draw(SmoothGui.graphics(), GuiPages.DOCK[i], lay.dockX + 14, y + 6, 16, accent);
-            SmoothGui.text(word(GuiPages.DOCK[i]), lay.dockX + 40, y + 7, 13, INK);
+            UiIcons.draw(SmoothGui.graphics(), GuiPages.DOCK[i], lay.dockX + 12, y + 6, 16, accent);
+            SmoothGui.text(word(GuiPages.DOCK[i]), lay.dockX + 34, y + 7, 13, INK);
+            String value = dockValue(GuiPages.PANES[i]);
+            if (!value.isEmpty()) {
+                SmoothGui.text(value, lay.dockX + lay.dockW - 12 - SmoothGui.width(value, 11), y + 8, 11, accent);
+            }
         }
         if (pane != null) {
             SmoothGui.shadow(lay.flyX, lay.flyY, lay.flyW, lay.flyH, 14, 0x60000000);
-            SmoothGui.glass(lay.flyX, lay.flyY, lay.flyW, lay.flyH, 14, panel(), true);
+            SmoothGui.glass(lay.flyX, lay.flyY, lay.flyW, lay.flyH, 14, panel(), false);
 
             paintPane(lay, mouseX, mouseY);
         }
@@ -413,8 +407,8 @@ public final class ClickGuiScreen extends Screen {
         int y = lay.flyY + 8;
         if ("lang".equals(pane)) {
             chips(x, y, lay.flyW - 16, new String[]{"English", "Deutsch", "Español", "Français", "Русский"}, lang, mouseX, mouseY);
-        } else if ("scale".equals(pane)) {
-            chips(x, y, lay.flyW - 16, new String[]{"80", "100", "125"}, Integer.toString(uiScale), mouseX, mouseY);
+        } else if ("scale".equals(pane) || "hud".equals(pane)) {
+            chips(x, y, lay.flyW - 16, scaleLabels(), "scale".equals(pane) ? menuScale + "%" : hudScale + "%", mouseX, mouseY);
         } else if ("font".equals(pane)) {
             chips(x, y, lay.flyW - 16, new String[]{"Helvetica Neue", "Arial", "Georgia", "Menlo", "Verdana"}, fontName, mouseX, mouseY);
         } else if ("stream".equals(pane) || "sounds".equals(pane)) {
@@ -431,10 +425,7 @@ public final class ClickGuiScreen extends Screen {
         for (int i = 0; i < options.length; i++) {
             int row = y + i * 28;
             boolean on = options[i].equals(selected);
-            SmoothGui.flat(x, row, w, 26, 8, on ? accent : 0xFF1B1E26);
-            if (on) {
-                SmoothGui.stroke(x, row, w, 26, 8, 1.0F, accent);
-            }
+            SmoothGui.flat(x, row, w, 26, 8, on ? accent : 0xFF16181C);
             SmoothGui.text(options[i], x + 8, row + 6, 12, on && light(accent) ? 0xFF0C1016 : INK);
 
         }
@@ -475,6 +466,11 @@ public final class ClickGuiScreen extends Screen {
                 if (!hit.equals(category) || !search.isEmpty()) {
                     cardsMs = 0.0F;
                     cardsDelay = 0L;
+                }
+                if ("HUD".equals(hit)) {
+                    play();
+                    this.minecraft.setScreen(new HudEditorScreen(this));
+                    return true;
                 }
                 category = hit;
                 search = "";
@@ -552,9 +548,14 @@ public final class ClickGuiScreen extends Screen {
         int y = lay.flyY + 8;
         if ("lang".equals(pane)) {
             lang = pick(mx, my, x, y, lay.flyW - 16, new String[]{"English", "Deutsch", "Español", "Français", "Русский"}, lang);
-        } else if ("scale".equals(pane)) {
-            String picked = pick(mx, my, x, y, lay.flyW - 16, new String[]{"80", "100", "125"}, Integer.toString(uiScale));
-            uiScale = Integer.parseInt(picked);
+        } else if ("scale".equals(pane) || "hud".equals(pane)) {
+            String picked = pick(mx, my, x, y, lay.flyW - 16, scaleLabels(), "scale".equals(pane) ? menuScale + "%" : hudScale + "%");
+            int value = Integer.parseInt(picked.substring(0, picked.length() - 1));
+            if ("scale".equals(pane)) {
+                menuScale = value;
+            } else {
+                hudScale = value;
+            }
         } else if ("font".equals(pane)) {
             fontName = pick(mx, my, x, y, lay.flyW - 16, new String[]{"Helvetica Neue", "Arial", "Georgia", "Menlo", "Verdana"}, fontName);
             SmoothGui.font(fontName);
@@ -691,8 +692,9 @@ public final class ClickGuiScreen extends Screen {
     }
 
     private Layout layout() {
-        float scale = Math.min((this.width - 24) / 980.0F, (this.height - 24) / 600.0F);
-        scale = Math.max(0.62F, Math.min(scale, 1.05F)) * (uiScale / 100.0F);
+        float wanted = menuScale / 100.0F;
+        float limit = Math.min((this.width - 16) / 980.0F, (this.height - 16) / 600.0F);
+        float scale = Math.min(wanted, Math.max(0.5F, limit));
         int w = Math.round(980 * scale);
         int h = Math.round(600 * scale);
         Frame f = new Frame((this.width - w) / 2, (this.height - h) / 2, w, h, Math.round(196 * scale));
@@ -708,20 +710,8 @@ public final class ClickGuiScreen extends Screen {
         int dockY = f.y + f.h - pad - dockH;
         int flyH = flyHeight();
         int flyY = dockY;
-        if (pane != null) {
-            int index = 0;
-            for (int i = 0; i < GuiPages.PANES.length; i++) {
-                if (GuiPages.PANES[i].equals(pane)) {
-                    index = i;
-                }
-            }
-            flyY = dockY + 6 + index * 32;
-            int limit = f.y + f.h - pad - flyH;
-            if (flyY > limit) {
-                flyY = Math.max(f.y + pad, limit);
-            }
-        }
-        return new Layout(f, pad, searchW, f.x + f.w - pad - searchW, f.y + pad + 2, mainX, listTop, f.h - pad - 56, (f.w - f.side - 32) / 3, f.x + pad + 8, profileY, profileW, catsTop, catsH, profileW, mainX + 8, dockY, 168, dockH, mainX + 184, flyY, 168, flyH);
+        int dockW = 196;
+        return new Layout(f, pad, searchW, f.x + f.w - pad - searchW, f.y + pad + 2, mainX, listTop, f.h - pad - 56, (f.w - f.side - 32) / 3, f.x + pad + 8, profileY, profileW, catsTop, catsH, profileW, mainX + 8, dockY, dockW, dockH, mainX + 16 + dockW, flyY, 132, flyH);
     }
 
     private List<GuiPages.Card> visible() {
@@ -850,8 +840,8 @@ public final class ClickGuiScreen extends Screen {
         if ("stream".equals(pane) || "sounds".equals(pane)) {
             return 72;
         }
-        if ("scale".equals(pane)) {
-            return 100;
+        if ("scale".equals(pane) || "hud".equals(pane)) {
+            return 16 + SCALES.length * 28;
         }
         if ("font".equals(pane) || "lang".equals(pane)) {
             return 156;
@@ -919,25 +909,62 @@ public final class ClickGuiScreen extends Screen {
         int x = lay.searchX;
         int y = lay.searchY;
         int w = lay.searchW;
-        SmoothGui.fill(x, y, w, 32, 10, 0x61000000);
         if (searchOn) {
-            SmoothGui.stroke(x, y, w, 32, 10, 1.0F, accent);
-        } else {
-            SmoothGui.stroke(x, y, w, 32, 10, 1.0F, 0x14FFFFFF);
-            SmoothGui.fill(x + 12, y + 1, w - 24, 1, 0, 0x1FFFFFFF);
+            SmoothGui.flat(x, y, w, 32, 10, 0x18FFFFFF);
         }
+        SmoothGui.glass(x, y, w, 32, 10, glassColor(), false);
         UiIcons.draw(g, "search", x + 10, y + 9, 14, MUTED);
-        String shown = search.isEmpty() ? (searchOn ? "" : ghost()) : search;
-        SmoothGui.text(shown, x + 32, y + 9, 13, search.isEmpty() ? MUTED : INK);
+        boolean ghosting = search.isEmpty() && !searchOn;
+        String shown = search.isEmpty() ? (ghosting ? ghost() : "") : search;
+        int color = search.isEmpty() ? MUTED : INK;
+        int textX = x + 32;
+        if (!shown.isEmpty()) {
+            textX = paintPopped(shown, textX, y + 9, 13, color, ghosting || searchOn);
+        }
         if (!search.isEmpty()) {
             UiIcons.draw(g, "close", x + w - 24, y + 9, 14, MUTED);
         }
-        boolean blink = (System.currentTimeMillis() / 500L) % 2L == 0L;
-        if (blink && (searchOn || search.isEmpty())) {
-            String caretText = searchOn ? search : shown;
-            int caret = x + 32 + SmoothGui.width(caretText, 13) + 1;
-            SmoothGui.fill(caret, y + 9, 1, 13, 0, accent);
+        if ((ghosting || searchOn) && (System.currentTimeMillis() / 500L) % 2L == 0L) {
+            SmoothGui.fill(textX + 1, y + 9, 1, 13, 0, accent);
         }
+    }
+
+    private static int paintPopped(String text, int x, int y, int size, int color, boolean animate) {
+        String head = text.length() > 1 ? text.substring(0, text.length() - 1) : "";
+        String tail = text.substring(text.length() - 1);
+        if (!head.isEmpty()) {
+            SmoothGui.text(head, x, y, size, color);
+            x += SmoothGui.width(head, size);
+        }
+        float t = popT(text, animate);
+        int dy = 0;
+        float fade = 1.0F;
+        if (t < 1.0F) {
+            dy = Math.round(t < 0.62F ? 6.0F - 8.0F * (t / 0.62F) : -2.0F * (1.0F - (t - 0.62F) / 0.38F));
+            fade = Math.min(1.0F, t / 0.35F);
+        }
+        float prev = SmoothGui.alpha();
+        SmoothGui.alpha(prev * fade);
+        SmoothGui.text(tail, x, y + dy, size, color);
+        SmoothGui.alpha(prev);
+        return x + SmoothGui.width(tail, size);
+    }
+
+    private static String lastPop = "";
+    private static long popAt;
+
+    private static float popT(String text, boolean animate) {
+        if (!animate || text.isEmpty()) {
+            return 1.0F;
+        }
+        if (!text.equals(lastPop)) {
+            if (text.length() >= lastPop.length()) {
+                popAt = System.currentTimeMillis();
+            }
+            lastPop = text;
+        }
+        float t = (System.currentTimeMillis() - popAt) / 320.0F;
+        return t >= 1.0F ? 1.0F : Math.max(0.0F, t);
     }
 
     private static boolean inSearch(Layout lay, double mx, double my) {
@@ -946,34 +973,38 @@ public final class ClickGuiScreen extends Screen {
 
     private static String ghost() {
         String[] phrases = {"Search trigger bot", "Search velocity", "Search flight"};
-        long time = System.currentTimeMillis();
-        int index = 0;
-        while (index < 64) {
-            String phrase = phrases[index % phrases.length];
+        long total = 0L;
+        long[] cycles = new long[phrases.length];
+        for (int i = 0; i < phrases.length; i++) {
+            cycles[i] = phrases[i].length() * 68L + 700L + phrases[i].length() * 34L + 240L;
+            total += cycles[i];
+        }
+        long time = System.currentTimeMillis() % total;
+        for (int i = 0; i < phrases.length; i++) {
+            if (time >= cycles[i]) {
+                time -= cycles[i];
+                continue;
+            }
+            String phrase = phrases[i];
             long type = phrase.length() * 68L;
             long hold = 700L;
             long erase = phrase.length() * 34L;
-            long gap = 240L;
-            long cycle = type + hold + erase + gap;
-            if (time < cycle) {
-                if (time < type) {
-                    return phrase.substring(0, (int) (time / 68L));
-                }
-                time -= type;
-                if (time < hold) {
-                    return phrase;
-                }
-                time -= hold;
-                if (time < erase) {
-                    int left = phrase.length() - (int) (time / 34L);
-                    return left <= 0 ? "" : phrase.substring(0, left);
-                }
-                return "";
+            if (time < type) {
+                int n = (int) (time / 68L);
+                return n <= 0 ? "" : phrase.substring(0, Math.min(phrase.length(), n));
             }
-            time -= cycle;
-            index++;
+            time -= type;
+            if (time < hold) {
+                return phrase;
+            }
+            time -= hold;
+            if (time < erase) {
+                int left = phrase.length() - (int) (time / 34L);
+                return left <= 0 ? "" : phrase.substring(0, left);
+            }
+            return "";
         }
-        return phrases[0];
+        return "";
     }
 
     private static String colorOf(String name) {
@@ -1054,13 +1085,17 @@ public final class ClickGuiScreen extends Screen {
 
     private void slider(int x, int y, int track, int filled) {
         int amount = Math.max(0, Math.min(track, filled));
-        SmoothGui.flat(x, y, track, 6, 3, 0xFF2C3644);
-        if (amount > 4) {
-            SmoothGui.flat(x, y, amount, 6, 3, accent);
+        int railY = y + 2;
+        SmoothGui.flat(x, railY, track, 3, 2, 0xFF1A1C22);
+        if (amount > 2) {
+            SmoothGui.flat(x, railY, amount, 3, 2, accent);
         }
-        int tx = Math.max(x, Math.min(x + track - 14, x + amount - 7));
-        SmoothGui.flat(tx, y - 4, 14, 14, 7, accent);
-        SmoothGui.flat(tx + 3, y - 1, 8, 8, 4, 0xFF12161D);
+        int thumbW = 14;
+        int thumbH = 8;
+        int tx = Math.max(x, Math.min(x + track - thumbW, x + amount - thumbW / 2));
+        int ty = railY - 3;
+        SmoothGui.flat(tx, ty, thumbW, thumbH, 3, accent);
+        SmoothGui.flat(tx + 1, ty + 1, thumbW - 2, thumbH - 2, 2, 0xFF101014);
     }
 
     private static boolean isSlider(Modules.Setting setting) {
@@ -1106,20 +1141,67 @@ public final class ClickGuiScreen extends Screen {
         SmoothGui.fill(x, y, w, h, r, inner);
     }
 
-    // Module panels: same glass, a little less see-through than the window so they read smoother.
+    // Module cards sit a step above the window so the liquid edge still reads.
     private int panel() {
-        int a = shell() >>> 24;
-        int alpha = Math.min(255, a + Math.round((255 - a) * 0.38F));
-        return (alpha << 24) | 0x16171B;
+        return glassColor();
+    }
+
+    private int side() {
+        return glassColor();
     }
 
     private int shell() {
+        return glassColor();
+    }
+
+    static int glassColor() {
         if (glass <= 0) {
-            return 0xFF121212;
+            return 0xF20E1014;
         }
-        int alpha = Math.round(232 - glass * 1.45F);
-        alpha = Math.max(72, Math.min(232, alpha));
-        return (alpha << 24) | 0x121212;
+        int alpha = Math.round(196 - glass * 0.55F);
+        alpha = Math.max(148, Math.min(196, alpha));
+        return (alpha << 24) | 0x0E1014;
+    }
+
+    static float hud() {
+        return hudScale / 100.0F;
+    }
+
+    static int glassAmount() {
+        return glass;
+    }
+
+    static int accentColor() {
+        return accent;
+    }
+
+    private static String[] scaleLabels() {
+        String[] labels = new String[SCALES.length];
+        for (int i = 0; i < SCALES.length; i++) {
+            labels[i] = SCALES[i] + "%";
+        }
+        return labels;
+    }
+
+    private String dockValue(String paneId) {
+        return switch (paneId) {
+            case "scale" -> menuScale + "%";
+            case "hud" -> hudScale + "%";
+            case "lang" -> lang;
+            case "quality" -> glass + "%";
+            case "blur" -> (blurAmt * 10) + "%";
+            case "stream" -> stream ? "On" : "Off";
+            case "sounds" -> sounds ? "On" : "Off";
+            default -> "";
+        };
+    }
+
+    private static String activeFont() {
+        return fontName;
+    }
+
+    private int worldBlur() {
+        return backdrop();
     }
 
     private int backdrop() {

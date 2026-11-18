@@ -179,7 +179,7 @@ public final class GlassDraw {
 
     private static DynamicTexture bake(boolean ring) {
         NativeImage image = new NativeImage(SIZE, SIZE, false);
-        float rad = CORNER - 1.5F;
+        float rad = CORNER - 0.5F;
         for (int y = 0; y < SIZE; y++) {
             for (int x = 0; x < SIZE; x++) {
                 float d = sdf(x + 0.5F, y + 0.5F, rad);
